@@ -1,39 +1,18 @@
-import 'dart:convert';
-
 import 'models.dart';
-import 'storage_backend.dart';
+import 'local_store_driver.dart';
 
 class LocalStore {
-  LocalStore._(this._backend);
+  LocalStore._(this._driver);
 
-  static const String _storageKey = 'loan_management_app_db_v1';
-  static StorageBackend? debugBackend;
+  static LocalStoreDriver? debugDriver;
 
-  final StorageBackend _backend;
+  final LocalStoreDriver _driver;
 
   static Future<LocalStore> create() async {
-    return LocalStore._(debugBackend ?? createPlatformStorageBackend());
+    return LocalStore._(debugDriver ?? await createPlatformLocalStoreDriver());
   }
 
-  Future<AppData> load() async {
-    final String? raw = await _backend.read(_storageKey);
-    if (raw == null || raw.isEmpty) {
-      return AppData.empty(DateTime.now());
-    }
+  Future<AppData> load() => _driver.load();
 
-    try {
-      final Object? decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        return AppData.fromJson(decoded);
-      }
-    } catch (_) {
-      return AppData.empty(DateTime.now());
-    }
-
-    return AppData.empty(DateTime.now());
-  }
-
-  Future<void> save(AppData data) {
-    return _backend.write(_storageKey, data.toJsonString());
-  }
+  Future<void> save(AppData data) => _driver.save(data);
 }

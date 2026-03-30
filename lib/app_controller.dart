@@ -4,11 +4,13 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import 'google_sheets_sync.dart';
 import 'local_store.dart';
 import 'models.dart';
 
 class AppController extends ChangeNotifier {
-  AppController._(this._store, this._data) : _now = DateTime.now() {
+  AppController._(this._store, this._syncService, this._data)
+    : _now = DateTime.now() {
     _startTicker();
     unawaited(_attemptScheduledSyncIfDue());
   }
@@ -20,6 +22,7 @@ class AppController extends ChangeNotifier {
   ];
 
   final LocalStore _store;
+  final GoogleSheetsSyncService _syncService;
   final Uuid _uuid = const Uuid();
 
   AppData _data;
@@ -29,8 +32,15 @@ class AppController extends ChangeNotifier {
 
   static Future<AppController> create() async {
     final LocalStore store = await LocalStore.create();
-    final AppData data = await store.load();
-    return AppController._(store, data);
+    final GoogleSheetsSyncService syncService =
+        await GoogleSheetsSyncService.create();
+    final AppData loaded = await store.load();
+    final AppData data = loaded.copyWith(
+      syncState: loaded.syncState.copyWith(
+        isConfigured: syncService.isConfigured,
+      ),
+    );
+    return AppController._(store, syncService, data);
   }
 
   DateTime get now => _now;
@@ -524,25 +534,21 @@ class AppController extends ChangeNotifier {
     final DateTime timestamp = DateTime.now();
 
     try {
-      final SyncState updatedSync;
-      if (_data.syncState.isConfigured) {
-        updatedSync = _data.syncState.copyWith(
-          lastAttemptAt: timestamp,
-          lastSuccessAt: timestamp,
-          lastMessage: isManual
-              ? 'Manual Google Sheets sync completed.'
-              : 'Scheduled Google Sheets sync completed.',
-          nextAttemptAt: timestamp.add(const Duration(minutes: 30)),
-        );
-      } else {
-        updatedSync = _data.syncState.copyWith(
-          lastAttemptAt: timestamp,
-          clearLastSuccessAt: true,
-          lastMessage:
-              'Google Sheets sync is not configured yet. Local data remains available offline.',
-          nextAttemptAt: timestamp.add(const Duration(minutes: 30)),
-        );
-      }
+      final GoogleSheetsSyncResult result = await _syncService.sync(
+        _data,
+        isManual: isManual,
+      );
+      final SyncState updatedSync = _data.syncState.copyWith(
+        isConfigured: _syncService.isConfigured,
+        lastAttemptAt: timestamp,
+        lastSuccessAt: result.success
+            ? timestamp
+            : _data.syncState.lastSuccessAt,
+        clearLastSuccessAt:
+            !result.success && _data.syncState.lastSuccessAt == null,
+        lastMessage: result.message,
+        nextAttemptAt: timestamp.add(const Duration(minutes: 30)),
+      );
 
       await _commit(_data.copyWith(syncState: updatedSync), now: timestamp);
     } finally {
