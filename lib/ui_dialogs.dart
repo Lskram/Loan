@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'app_controller.dart';
@@ -11,6 +12,7 @@ class BorrowerDraft {
     required this.phoneNumber,
     required this.creditLevel,
   });
+
   final String name;
   final String phoneNumber;
   final CreditLevel creditLevel;
@@ -24,6 +26,7 @@ class DealDraft {
     required this.interestRatePercent,
     required this.dueDate,
   });
+
   final String borrowerId;
   final String dealType;
   final double principal;
@@ -33,12 +36,106 @@ class DealDraft {
 
 class PaymentDraft {
   const PaymentDraft({required this.amount, required this.note});
+
   final double amount;
   final String note;
 }
 
+Future<DateTime?> showAdaptiveDueDatePicker(
+  BuildContext context,
+  DateTime initialDate,
+) async {
+  if (!isAppleVisuals(context)) {
+    final DateTime? selectedDate = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDate: initialDate,
+    );
+    if (selectedDate == null) {
+      return null;
+    }
+    if (!context.mounted) {
+      return null;
+    }
+
+    final TimeOfDay initialTime = TimeOfDay.fromDateTime(initialDate);
+    final TimeOfDay? selectedTime = await showTimePicker(
+      context: context,
+      initialTime: initialTime,
+    );
+    final TimeOfDay resolvedTime = selectedTime ?? initialTime;
+    return DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      resolvedTime.hour,
+      resolvedTime.minute,
+    );
+  }
+
+  DateTime selectedDate = initialDate;
+  return showCupertinoModalPopup<DateTime>(
+    context: context,
+    builder: (BuildContext context) {
+      return Container(
+        height: 340,
+        decoration: const BoxDecoration(
+          color: Color(0xFFF7F7FA),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                child: Row(
+                  children: <Widget>[
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                    const Expanded(
+                      child: Text(
+                        'Due Date & Time',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).pop(selectedDate),
+                      child: const Text('Done'),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.dateAndTime,
+                  initialDateTime: initialDate,
+                  minimumDate: DateTime(2020),
+                  maximumDate: DateTime(2100),
+                  onDateTimeChanged: (DateTime value) => selectedDate = value,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class BorrowerFormDialog extends StatefulWidget {
   const BorrowerFormDialog({super.key, this.initialBorrower});
+
   final Borrower? initialBorrower;
 
   @override
@@ -72,10 +169,9 @@ class _BorrowerFormDialogState extends State<BorrowerFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isEditing = widget.initialBorrower != null;
     return AlertDialog(
-      title: Text(
-        widget.initialBorrower == null ? 'เพิ่มผู้กู้' : 'แก้ไขข้อมูลผู้กู้',
-      ),
+      title: Text(isEditing ? 'แก้ไขข้อมูลผู้กู้' : 'เพิ่มผู้กู้'),
       content: SizedBox(
         width: 420,
         child: Form(
@@ -113,8 +209,9 @@ class _BorrowerFormDialogState extends State<BorrowerFormDialog> {
                     )
                     .toList(),
                 onChanged: (CreditLevel? value) {
-                  if (value == null) return;
-                  setState(() => _creditLevel = value);
+                  if (value != null) {
+                    setState(() => _creditLevel = value);
+                  }
                 },
               ),
             ],
@@ -128,7 +225,9 @@ class _BorrowerFormDialogState extends State<BorrowerFormDialog> {
         ),
         FilledButton(
           onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
+            if (!_formKey.currentState!.validate()) {
+              return;
+            }
             Navigator.of(context).pop(
               BorrowerDraft(
                 name: _nameController.text.trim(),
@@ -137,7 +236,7 @@ class _BorrowerFormDialogState extends State<BorrowerFormDialog> {
               ),
             );
           },
-          child: const Text('บันทึก'),
+          child: Text(isEditing ? 'บันทึกการแก้ไข' : 'บันทึก'),
         ),
       ],
     );
@@ -146,6 +245,7 @@ class _BorrowerFormDialogState extends State<BorrowerFormDialog> {
 
 class PaymentFormDialog extends StatefulWidget {
   const PaymentFormDialog({super.key, required this.remainingBalance});
+
   final double remainingBalance;
 
   @override
@@ -226,7 +326,9 @@ class _PaymentFormDialogState extends State<PaymentFormDialog> {
         ),
         FilledButton(
           onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
+            if (!_formKey.currentState!.validate()) {
+              return;
+            }
             Navigator.of(context).pop(
               PaymentDraft(
                 amount: double.parse(_amountController.text),
@@ -249,6 +351,7 @@ class ReasonDialog extends StatefulWidget {
     required this.confirmLabel,
     required this.initialValue,
   });
+
   final String title;
   final String hintText;
   final String confirmLabel;
@@ -299,7 +402,9 @@ class _ReasonDialogState extends State<ReasonDialog> {
         ),
         FilledButton(
           onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
+            if (!_formKey.currentState!.validate()) {
+              return;
+            }
             Navigator.of(context).pop(_reasonController.text.trim());
           },
           child: Text(widget.confirmLabel),
@@ -314,9 +419,12 @@ class DealFormDialog extends StatefulWidget {
     super.key,
     required this.controller,
     this.initialBorrowerId,
+    this.initialDeal,
   });
+
   final AppController controller;
   final String? initialBorrowerId;
+  final LoanDeal? initialDeal;
 
   @override
   State<DealFormDialog> createState() => _DealFormDialogState();
@@ -334,12 +442,25 @@ class _DealFormDialogState extends State<DealFormDialog> {
   void initState() {
     super.initState();
     final List<Borrower> borrowers = widget.controller.borrowers();
+    final LoanDeal? initialDeal = widget.initialDeal;
     _selectedBorrowerId =
+        initialDeal?.borrowerId ??
         widget.initialBorrowerId ??
         (borrowers.isNotEmpty ? borrowers.first.id : null);
-    _dealTypeController = TextEditingController(text: 'Loan');
-    _principalController = TextEditingController();
-    _interestController = TextEditingController(text: '25');
+    _dealTypeController = TextEditingController(
+      text: initialDeal?.dealType ?? 'Loan',
+    );
+    _principalController = TextEditingController(
+      text: initialDeal == null
+          ? ''
+          : _formatEditableNumber(initialDeal.principal),
+    );
+    _interestController = TextEditingController(
+      text: initialDeal == null
+          ? '25'
+          : _formatEditableNumber(initialDeal.interestRatePercent),
+    );
+    _dueDate = initialDeal?.dueDate ?? _dueDate;
   }
 
   @override
@@ -350,16 +471,25 @@ class _DealFormDialogState extends State<DealFormDialog> {
     super.dispose();
   }
 
+  String _formatEditableNumber(double value) {
+    return value % 1 == 0 ? value.toStringAsFixed(0) : value.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<Borrower> borrowers = widget.controller.borrowers();
+    final LoanDeal? initialDeal = widget.initialDeal;
+    final bool isEditing = initialDeal != null;
     final double principal = double.tryParse(_principalController.text) ?? 0;
     final double rate = double.tryParse(_interestController.text) ?? 0;
     final double interest = principal * (rate / 100);
     final double totalDue = principal + interest;
+    final double paidSoFar = initialDeal == null
+        ? 0
+        : widget.controller.totalPaidForDeal(initialDeal.id);
 
     return AlertDialog(
-      title: const Text('สร้างดีลใหม่'),
+      title: Text(isEditing ? 'แก้ไขดีล' : 'สร้างดีลใหม่'),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -454,18 +584,20 @@ class _DealFormDialogState extends State<DealFormDialog> {
                 const SizedBox(height: 14),
                 InkWell(
                   onTap: () async {
-                    final DateTime? selected = await showDatePicker(
-                      context: context,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2100),
-                      initialDate: _dueDate,
+                    final DateTime? selected = await showAdaptiveDueDatePicker(
+                      context,
+                      _dueDate,
                     );
-                    if (selected != null) setState(() => _dueDate = selected);
+                    if (selected != null) {
+                      setState(() => _dueDate = selected);
+                    }
                   },
                   borderRadius: BorderRadius.circular(16),
                   child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'วันครบกำหนด'),
-                    child: Text(formatDate(_dueDate)),
+                    decoration: const InputDecoration(
+                      labelText: 'วันและเวลาครบกำหนด',
+                    ),
+                    child: Text(formatDateTime(_dueDate)),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -483,6 +615,11 @@ class _DealFormDialogState extends State<DealFormDialog> {
                         label: 'ยอดรวมที่ต้องรับคืน',
                         value: formatMoney(totalDue),
                       ),
+                      if (paidSoFar > 0)
+                        InfoPill(
+                          label: 'ชำระแล้ว',
+                          value: formatMoney(paidSoFar),
+                        ),
                     ],
                   ),
                 ),
@@ -498,7 +635,9 @@ class _DealFormDialogState extends State<DealFormDialog> {
         ),
         FilledButton(
           onPressed: () {
-            if (!_formKey.currentState!.validate()) return;
+            if (!_formKey.currentState!.validate()) {
+              return;
+            }
             Navigator.of(context).pop(
               DealDraft(
                 borrowerId: _selectedBorrowerId!,
@@ -509,7 +648,7 @@ class _DealFormDialogState extends State<DealFormDialog> {
               ),
             );
           },
-          child: const Text('สร้างดีล'),
+          child: Text(isEditing ? 'บันทึกการแก้ไข' : 'สร้างดีล'),
         ),
       ],
     );
@@ -522,6 +661,7 @@ class BorrowerDetailDialog extends StatelessWidget {
     required this.controller,
     required this.borrower,
   });
+
   final AppController controller;
   final Borrower borrower;
 
@@ -535,6 +675,7 @@ class BorrowerDetailDialog extends StatelessWidget {
         .closedDeals()
         .where((LoanDeal deal) => deal.borrowerId == borrower.id)
         .toList();
+
     return AlertDialog(
       title: Text(borrower.name),
       content: SizedBox(
@@ -572,7 +713,7 @@ class BorrowerDetailDialog extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               if (activeDeals.isEmpty)
-                const Text('ไม่มีดีล active')
+                const Text('ไม่มีดีลที่กำลังติดตาม')
               else
                 Column(
                   children: activeDeals
@@ -635,6 +776,7 @@ class DealDetailDialog extends StatelessWidget {
     required this.controller,
     required this.initialDealId,
   });
+
   final AppController controller;
   final String initialDealId;
 
@@ -650,6 +792,7 @@ class DealDetailDialog extends StatelessWidget {
             content: Text('ดีลนี้อาจถูกลบหรือข้อมูลไม่สามารถโหลดได้'),
           );
         }
+
         final Borrower? borrower = controller.borrowerById(deal.borrowerId);
         final List<PaymentRecord> payments = controller.paymentsForDeal(
           deal.id,
@@ -657,6 +800,9 @@ class DealDetailDialog extends StatelessWidget {
         final List<DealEvent> events = controller.eventsForDeal(deal.id);
         final double remaining = controller.remainingBalanceForDeal(deal);
         final LoanDealStatus status = controller.statusForDeal(deal);
+        final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
+          context,
+        );
 
         return AlertDialog(
           title: Text(borrower?.name ?? 'Loan detail'),
@@ -710,7 +856,7 @@ class DealDetailDialog extends StatelessWidget {
                       InfoPill(label: 'คงเหลือ', value: formatMoney(remaining)),
                       InfoPill(
                         label: 'ครบกำหนด',
-                        value: formatDate(deal.dueDate),
+                        value: formatDateTime(deal.dueDate),
                       ),
                       InfoPill(
                         label: 'สร้างเมื่อ',
@@ -732,7 +878,8 @@ class DealDetailDialog extends StatelessWidget {
                   const SizedBox(height: 18),
                   SectionCard(
                     title: 'ประวัติการรับชำระ',
-                    subtitle: 'รองรับหลายงวดและยอดแต่ละงวดไม่จำเป็นต้องเท่ากัน',
+                    subtitle:
+                        'รองรับหลายงวดและจำนวนแต่ละงวดไม่จำเป็นต้องเท่ากัน',
                     child: payments.isEmpty
                         ? const EmptyState(
                             title: 'ยังไม่มีรายการรับชำระ',
@@ -759,7 +906,7 @@ class DealDetailDialog extends StatelessWidget {
                   const SizedBox(height: 18),
                   SectionCard(
                     title: 'ประวัติสถานะดีล',
-                    subtitle: 'ติดตามการสร้าง ปิด และ reopen',
+                    subtitle: 'ติดตามการสร้าง แก้ไข ปิด และ reopen',
                     child: events.isEmpty
                         ? const Text('ยังไม่มีประวัติสถานะ')
                         : Column(
@@ -785,12 +932,44 @@ class DealDetailDialog extends StatelessWidget {
             if (!deal.isClosed)
               OutlinedButton(
                 onPressed: () async {
+                  final DealDraft? draft = await showDialog<DealDraft>(
+                    context: context,
+                    builder: (BuildContext context) => DealFormDialog(
+                      controller: controller,
+                      initialDeal: deal,
+                    ),
+                  );
+                  if (draft == null) {
+                    return;
+                  }
+                  try {
+                    await controller.updateDeal(
+                      deal: deal,
+                      borrowerId: draft.borrowerId,
+                      dealType: draft.dealType,
+                      principal: draft.principal,
+                      interestRatePercent: draft.interestRatePercent,
+                      dueDate: draft.dueDate,
+                    );
+                  } on ArgumentError catch (error) {
+                    messenger?.showSnackBar(
+                      SnackBar(content: Text(error.message.toString())),
+                    );
+                  }
+                },
+                child: const Text('แก้ไขดีล'),
+              ),
+            if (!deal.isClosed)
+              OutlinedButton(
+                onPressed: () async {
                   final PaymentDraft? draft = await showDialog<PaymentDraft>(
                     context: context,
                     builder: (BuildContext context) =>
                         PaymentFormDialog(remainingBalance: remaining),
                   );
-                  if (draft == null) return;
+                  if (draft == null) {
+                    return;
+                  }
                   await controller.addPayment(
                     deal: deal,
                     amount: draft.amount,
@@ -811,7 +990,9 @@ class DealDetailDialog extends StatelessWidget {
                       initialValue: 'Closed manually after review.',
                     ),
                   );
-                  if (reason == null) return;
+                  if (reason == null) {
+                    return;
+                  }
                   await controller.closeDeal(deal: deal, reason: reason);
                 },
                 child: const Text('ปิดดีล'),
@@ -828,7 +1009,9 @@ class DealDetailDialog extends StatelessWidget {
                       initialValue: 'Reopened after payment review.',
                     ),
                   );
-                  if (reason == null) return;
+                  if (reason == null) {
+                    return;
+                  }
                   await controller.reopenDeal(deal: deal, reason: reason);
                 },
                 child: const Text('Reopen'),

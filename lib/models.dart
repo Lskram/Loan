@@ -2,7 +2,7 @@ import 'dart:convert';
 
 enum CreditLevel { good, medium, risky }
 
-enum DealEventType { created, manuallyClosed, autoClosed, reopened }
+enum DealEventType { created, updated, manuallyClosed, autoClosed, reopened }
 
 enum LoanDealStatus { tracking, dueSoon, dueToday, overdue, closed }
 
@@ -286,7 +286,7 @@ class SyncState {
       isConfigured: false,
       lastAttemptAt: null,
       lastSuccessAt: null,
-      lastMessage: 'Google Sheets sync is waiting for configuration.',
+      lastMessage: 'Firebase sync is waiting for configuration.',
       nextAttemptAt: now.add(const Duration(minutes: 30)),
     );
   }
@@ -302,7 +302,7 @@ class SyncState {
           : DateTime.parse(json['lastSuccessAt'] as String),
       lastMessage:
           json['lastMessage'] as String? ??
-          'Google Sheets sync is waiting for configuration.',
+          'Firebase sync is waiting for configuration.',
       nextAttemptAt: json['nextAttemptAt'] == null
           ? DateTime.now().add(const Duration(minutes: 30))
           : DateTime.parse(json['nextAttemptAt'] as String),
@@ -324,6 +324,40 @@ class AppData {
   final List<PaymentRecord> payments;
   final List<DealEvent> events;
   final SyncState syncState;
+
+  bool get hasRecords =>
+      borrowers.isNotEmpty ||
+      deals.isNotEmpty ||
+      payments.isNotEmpty ||
+      events.isNotEmpty;
+
+  DateTime? get latestDataTimestamp {
+    DateTime? latest;
+
+    void consider(DateTime value) {
+      if (latest == null || value.isAfter(latest!)) {
+        latest = value;
+      }
+    }
+
+    for (final Borrower borrower in borrowers) {
+      consider(borrower.updatedAt);
+    }
+    for (final LoanDeal deal in deals) {
+      consider(deal.updatedAt);
+      if (deal.closedAt != null) {
+        consider(deal.closedAt!);
+      }
+    }
+    for (final PaymentRecord payment in payments) {
+      consider(payment.paidAt);
+    }
+    for (final DealEvent event in events) {
+      consider(event.createdAt);
+    }
+
+    return latest;
+  }
 
   factory AppData.empty(DateTime now) {
     return AppData(

@@ -1,7 +1,47 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'formatters.dart';
 import 'models.dart';
+
+bool isAppleVisuals(BuildContext context) {
+  final TargetPlatform platform = Theme.of(context).platform;
+  return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+}
+
+BoxDecoration brightSurfaceDecoration(
+  BuildContext context, {
+  double radius = 24,
+  bool emphasize = false,
+}) {
+  final ColorScheme colors = Theme.of(context).colorScheme;
+  return BoxDecoration(
+    gradient: LinearGradient(
+      colors: <Color>[
+        Colors.white,
+        Color.lerp(colors.surfaceContainerHighest, Colors.white, 0.25)!,
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(
+      color: colors.outlineVariant.withValues(alpha: emphasize ? 0.58 : 0.42),
+    ),
+    boxShadow: <BoxShadow>[
+      BoxShadow(
+        color: colors.primary.withValues(alpha: emphasize ? 0.1 : 0.06),
+        blurRadius: emphasize ? 30 : 24,
+        offset: const Offset(0, 12),
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.03),
+        blurRadius: 12,
+        offset: const Offset(0, 4),
+      ),
+    ],
+  );
+}
 
 class PageFrame extends StatelessWidget {
   const PageFrame({
@@ -18,9 +58,16 @@ class PageFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    final bool isApple = isAppleVisuals(context);
+    final bool isCompact = MediaQuery.sizeOf(context).width < 640;
+    final Widget content = SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        padding: EdgeInsets.fromLTRB(
+          isCompact ? 16 : 20,
+          isApple ? 12 : 20,
+          isCompact ? 16 : 20,
+          isApple && isCompact ? 120 : 32,
+        ),
         children: <Widget>[
           Wrap(
             runSpacing: 16,
@@ -32,10 +79,38 @@ class PageFrame extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
+                    if (isApple)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'Nicha Loan Desk',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
+                      style:
+                          (isApple
+                                  ? Theme.of(context).textTheme.displaySmall
+                                  : Theme.of(context).textTheme.headlineMedium)
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: isApple ? -0.9 : null,
+                              ),
                     ),
                     if (subtitle != null) ...<Widget>[
                       const SizedBox(height: 8),
@@ -54,6 +129,49 @@ class PageFrame extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           child,
+        ],
+      ),
+    );
+
+    if (!isApple) {
+      return content;
+    }
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: <Color>[Color(0xFFF7FAFF), Color(0xFFFFF7EE)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Stack(
+        children: <Widget>[
+          const Positioned(
+            top: -92,
+            right: -36,
+            child: _PageGlowBlob(
+              size: 230,
+              colors: <Color>[Color(0x5263D3FF), Color(0x0063D3FF)],
+            ),
+          ),
+          const Positioned(
+            top: 220,
+            left: -88,
+            child: _PageGlowBlob(
+              size: 240,
+              colors: <Color>[Color(0x45FFC776), Color(0x00FFC776)],
+            ),
+          ),
+          const Positioned(
+            bottom: 60,
+            right: -72,
+            child: _PageGlowBlob(
+              size: 250,
+              colors: <Color>[Color(0x3EFF8DA1), Color(0x00FF8DA1)],
+            ),
+          ),
+          content,
         ],
       ),
     );
@@ -76,14 +194,17 @@ class SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool isApple = isAppleVisuals(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.outlineVariant),
-      ),
+      decoration: isApple
+          ? brightSurfaceDecoration(context, radius: 28, emphasize: true)
+          : BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: colors.outlineVariant),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -134,6 +255,8 @@ class MetricCard extends StatelessWidget {
     required this.value,
     required this.caption,
     required this.icon,
+    this.width = 220,
+    this.compact = false,
     this.onTap,
     this.actionLabel,
     this.tapTargetKey,
@@ -142,6 +265,8 @@ class MetricCard extends StatelessWidget {
   final String value;
   final String caption;
   final IconData icon;
+  final double width;
+  final bool compact;
   final VoidCallback? onTap;
   final String? actionLabel;
   final Key? tapTargetKey;
@@ -149,22 +274,25 @@ class MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
+    final bool isApple = isAppleVisuals(context);
     return SizedBox(
-      width: 220,
+      width: width,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           key: tapTargetKey,
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(isApple ? 24 : 20),
           child: Ink(
-            decoration: BoxDecoration(
-              color: colors.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: colors.outlineVariant),
-            ),
+            decoration: isApple
+                ? brightSurfaceDecoration(context, radius: 24)
+                : BoxDecoration(
+                    color: colors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: colors.outlineVariant),
+                  ),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(compact ? 14 : 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -172,24 +300,40 @@ class MetricCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: <Widget>[
                       Container(
-                        padding: const EdgeInsets.all(9),
+                        padding: EdgeInsets.all(compact ? 8 : 9),
                         decoration: BoxDecoration(
-                          color: colors.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
+                          gradient: isApple
+                              ? LinearGradient(
+                                  colors: <Color>[
+                                    colors.primary.withValues(alpha: 0.16),
+                                    colors.tertiary.withValues(alpha: 0.18),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : null,
+                          color: isApple ? null : colors.primaryContainer,
+                          borderRadius: BorderRadius.circular(
+                            isApple ? 14 : 12,
+                          ),
                         ),
                         child: Icon(icon, color: colors.primary, size: 20),
                       ),
                       if (onTap != null)
                         Icon(
-                          Icons.arrow_outward_rounded,
+                          isApple
+                              ? CupertinoIcons.chevron_forward
+                              : Icons.arrow_outward_rounded,
                           color: colors.primary,
-                          size: 18,
+                          size: isApple ? 16 : 18,
                         ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: compact ? 12 : 14),
                   Text(
                     title,
+                    maxLines: compact ? 2 : 3,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
@@ -197,14 +341,18 @@ class MetricCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     value,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        (compact
+                                ? Theme.of(context).textTheme.titleLarge
+                                : Theme.of(context).textTheme.headlineSmall)
+                            ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     caption,
-                    maxLines: 2,
+                    maxLines: compact ? 2 : 3,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: colors.onSurfaceVariant,
@@ -214,6 +362,8 @@ class MetricCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(
                       actionLabel!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: colors.primary,
                         fontWeight: FontWeight.w700,
@@ -243,12 +393,22 @@ class SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isApple = isAppleVisuals(context);
     return TextField(
       controller: controller,
       onChanged: onChanged,
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        fontWeight: isApple ? FontWeight.w600 : null,
+      ),
       decoration: InputDecoration(
         hintText: hintText,
-        prefixIcon: const Icon(Icons.search_rounded),
+        prefixIcon: Icon(
+          isApple ? CupertinoIcons.search : Icons.search_rounded,
+        ),
+        filled: true,
+        fillColor: isApple
+            ? Colors.white.withValues(alpha: 0.9)
+            : Theme.of(context).colorScheme.surfaceContainerHighest,
       ),
     );
   }
@@ -265,8 +425,18 @@ class InfoPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+        gradient: LinearGradient(
+          colors: <Color>[
+            Colors.white,
+            colors.surfaceContainerHighest.withValues(alpha: 0.92),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.34),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -533,19 +703,32 @@ class CompactHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool isApple = isAppleVisuals(context);
+    final ColorScheme colors = theme.colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xFF1E4D4F), Color(0xFF8B5E34)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        borderRadius: BorderRadius.circular(isApple ? 28 : 24),
+        gradient: isApple
+            ? LinearGradient(
+                colors: <Color>[colors.surface, const Color(0xFFF5F7FF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : const LinearGradient(
+                colors: <Color>[Color(0xFF1E4D4F), Color(0xFF8B5E34)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        border: Border.all(
+          color: isApple
+              ? colors.outlineVariant.withValues(alpha: 0.36)
+              : Colors.transparent,
         ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 24,
+            color: Colors.black.withValues(alpha: isApple ? 0.04 : 0.08),
+            blurRadius: isApple ? 28 : 24,
             offset: const Offset(0, 14),
           ),
         ],
@@ -564,7 +747,9 @@ class CompactHeroCard extends StatelessWidget {
                 Text(
                   'Dashboard overview',
                   style: theme.textTheme.labelLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.76),
+                    color: isApple
+                        ? colors.primary
+                        : Colors.white.withValues(alpha: 0.76),
                     letterSpacing: 0.4,
                   ),
                 ),
@@ -572,7 +757,7 @@ class CompactHeroCard extends StatelessWidget {
                 Text(
                   '\u0e20\u0e32\u0e1e\u0e23\u0e27\u0e21\u0e01\u0e32\u0e23\u0e15\u0e34\u0e14\u0e15\u0e32\u0e21\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49',
                   style: theme.textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
+                    color: isApple ? colors.onSurface : Colors.white,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -582,7 +767,9 @@ class CompactHeroCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.88),
+                    color: isApple
+                        ? colors.onSurfaceVariant
+                        : Colors.white.withValues(alpha: 0.88),
                     height: 1.35,
                   ),
                 ),
@@ -598,10 +785,12 @@ class CompactHeroCard extends StatelessWidget {
                 value: syncState.lastAttemptAt == null
                     ? '-'
                     : formatDateTime(syncState.lastAttemptAt!),
+                isApple: isApple,
               ),
               _SyncMetaChip(
                 label: 'Next sync',
                 value: formatDateTime(syncState.nextAttemptAt),
+                isApple: isApple,
               ),
             ],
           ),
@@ -612,21 +801,33 @@ class CompactHeroCard extends StatelessWidget {
 }
 
 class _SyncMetaChip extends StatelessWidget {
-  const _SyncMetaChip({required this.label, required this.value});
+  const _SyncMetaChip({
+    required this.label,
+    required this.value,
+    required this.isApple,
+  });
 
   final String label;
   final String value;
+  final bool isApple;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
     return Container(
       width: 172,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
+        color: isApple
+            ? colors.primary.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        border: Border.all(
+          color: isApple
+              ? colors.outlineVariant.withValues(alpha: 0.3)
+              : Colors.white.withValues(alpha: 0.18),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,14 +835,16 @@ class _SyncMetaChip extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.76),
+              color: isApple
+                  ? colors.onSurfaceVariant
+                  : Colors.white.withValues(alpha: 0.76),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
             style: theme.textTheme.titleSmall?.copyWith(
-              color: Colors.white,
+              color: isApple ? colors.onSurface : Colors.white,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -659,6 +862,7 @@ class BorrowerCard extends StatelessWidget {
     required this.outstanding,
     required this.onView,
     required this.onEdit,
+    required this.onDelete,
     required this.onCreateDeal,
   });
   final Borrower borrower;
@@ -666,6 +870,7 @@ class BorrowerCard extends StatelessWidget {
   final double outstanding;
   final VoidCallback onView;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
   final VoidCallback onCreateDeal;
 
   @override
@@ -676,11 +881,7 @@ class BorrowerCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
+      decoration: brightSurfaceDecoration(context, radius: 24, emphasize: true),
       child: Wrap(
         spacing: 20,
         runSpacing: 16,
@@ -694,9 +895,13 @@ class BorrowerCard extends StatelessWidget {
               children: <Widget>[
                 CircleAvatar(
                   radius: 28,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.12),
                   child: Text(
                     initial,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -746,6 +951,7 @@ class BorrowerCard extends StatelessWidget {
                 child: const Text('รายละเอียด'),
               ),
               OutlinedButton(onPressed: onEdit, child: const Text('แก้ไข')),
+              OutlinedButton(onPressed: onDelete, child: const Text('ลบ')),
               FilledButton.tonal(
                 onPressed: onCreateDeal,
                 child: const Text('ปล่อยกู้'),
@@ -769,6 +975,7 @@ class DealCard extends StatelessWidget {
     required this.daysUntilDue,
     required this.status,
     required this.onView,
+    this.onEdit,
     this.onPayment,
   });
   final String borrowerName;
@@ -779,6 +986,7 @@ class DealCard extends StatelessWidget {
   final int daysUntilDue;
   final LoanDealStatus status;
   final VoidCallback onView;
+  final VoidCallback? onEdit;
   final VoidCallback? onPayment;
 
   @override
@@ -787,11 +995,7 @@ class DealCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
+      decoration: brightSurfaceDecoration(context, radius: 24, emphasize: true),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -821,7 +1025,7 @@ class DealCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '${deal.dealType}  •  Due ${formatDate(deal.dueDate)}  •  $borrowerPhone',
+                      '${deal.dealType}  •  Due ${formatDateTime(deal.dueDate)}  •  $borrowerPhone',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -837,6 +1041,11 @@ class DealCard extends StatelessWidget {
                     onPressed: onView,
                     child: const Text('รายละเอียด'),
                   ),
+                  if (onEdit != null)
+                    OutlinedButton(
+                      onPressed: onEdit,
+                      child: const Text('แก้ไขดีล'),
+                    ),
                   if (onPayment != null)
                     FilledButton.tonal(
                       onPressed: onPayment,
@@ -905,7 +1114,7 @@ class DealListTile extends StatelessWidget {
       onTap: onTap,
       title: Text(borrowerName, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        '${deal.dealType} • ${formatDate(deal.dueDate)} • ${dueOffsetLabel(daysUntilDue)}',
+        '${deal.dealType} • ${formatDateTime(deal.dueDate)} • ${dueOffsetLabel(daysUntilDue)}',
       ),
       trailing: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 118),
@@ -941,11 +1150,7 @@ class NotificationListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
+      decoration: brightSurfaceDecoration(context, radius: 20),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
         visualDensity: VisualDensity.compact,
@@ -970,13 +1175,34 @@ class NotificationListTile extends StatelessWidget {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         subtitle: Text(
-          '${dealStatusLabel(item.status)} • Due ${formatDate(item.dueDate)} • ${dueOffsetLabel(item.daysOffset)}',
+          '${dealStatusLabel(item.status)} • Due ${formatDateTime(item.dueDate)} • ${dueOffsetLabel(item.daysOffset)}',
         ),
         trailing: Text(
           formatMoney(item.remainingBalance),
           style: Theme.of(
             context,
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+  }
+}
+
+class _PageGlowBlob extends StatelessWidget {
+  const _PageGlowBlob({required this.size, required this.colors});
+
+  final double size;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: colors),
         ),
       ),
     );

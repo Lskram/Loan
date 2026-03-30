@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "763203309496",
+    "project_id": "loan-a0876",
+    "storage_bucket": "loan-a0876.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:763203309496:android:9d22fe47ca82d85c3ec94d",
+        "android_client_info": {
+          "package_name": "com.lskram.nichaloandesk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbjD2OWFt7OdtpmrvOO-uZHEDpeO0bNpg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

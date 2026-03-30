@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
-import 'google_sheets_sync.dart';
+import 'firebase_sync_service.dart';
 import 'local_store.dart';
 import 'models.dart';
 
@@ -12,7 +12,7 @@ class AppController extends ChangeNotifier {
   AppController._(this._store, this._syncService, this._data)
     : _now = DateTime.now() {
     _startTicker();
-    unawaited(_attemptScheduledSyncIfDue());
+    unawaited(_attemptStartupSync());
   }
 
   static const List<String> suggestedDealTypes = <String>[
@@ -22,21 +22,30 @@ class AppController extends ChangeNotifier {
   ];
 
   final LocalStore _store;
-  final GoogleSheetsSyncService _syncService;
+  final FirebaseSyncService _syncService;
   final Uuid _uuid = const Uuid();
 
   AppData _data;
   DateTime _now;
   Timer? _ticker;
   bool _syncInFlight = false;
+  bool _syncQueued = false;
+  bool _queuedManualSync = false;
+  bool _hasUnsyncedChanges = false;
 
   static Future<AppController> create() async {
     final LocalStore store = await LocalStore.create();
-    final GoogleSheetsSyncService syncService =
-        await GoogleSheetsSyncService.create();
+    final FirebaseSyncService syncService = await FirebaseSyncService.create();
     final AppData loaded = await store.load();
-    final AppData data = loaded.copyWith(
-      syncState: loaded.syncState.copyWith(
+    final AppData? restored = syncService.isConfigured
+        ? await syncService.restoreIfRemoteIsNewer(loaded)
+        : null;
+    if (restored != null) {
+      await store.save(restored);
+    }
+    final AppData baseData = restored ?? loaded;
+    final AppData data = baseData.copyWith(
+      syncState: baseData.syncState.copyWith(
         isConfigured: syncService.isConfigured,
       ),
     );
@@ -238,6 +247,10 @@ class AppController extends ChangeNotifier {
     return total;
   }
 
+  bool borrowerHasLinkedDeals(String borrowerId) {
+    return _data.deals.any((LoanDeal deal) => deal.borrowerId == borrowerId);
+  }
+
   double totalPaidForDeal(String dealId) {
     double total = 0;
     for (final PaymentRecord payment in _data.payments) {
@@ -263,14 +276,14 @@ class AppController extends ChangeNotifier {
       return LoanDealStatus.closed;
     }
 
-    final int difference = daysUntilDue(deal);
-    if (difference < 0) {
+    if (deal.dueDate.isBefore(_now)) {
       return LoanDealStatus.overdue;
     }
+    final int difference = daysUntilDue(deal);
     if (difference == 0) {
       return LoanDealStatus.dueToday;
     }
-    if (difference <= 3) {
+    if (deal.dueDate.difference(_now) <= const Duration(days: 3)) {
       return LoanDealStatus.dueSoon;
     }
     return LoanDealStatus.tracking;
@@ -293,7 +306,11 @@ class AppController extends ChangeNotifier {
 
     final List<Borrower> borrowers = <Borrower>[..._data.borrowers, borrower];
 
-    await _commit(_data.copyWith(borrowers: borrowers), now: timestamp);
+    await _commit(
+      _data.copyWith(borrowers: borrowers),
+      now: timestamp,
+      triggerImmediateSync: true,
+    );
   }
 
   Future<void> updateBorrower({
@@ -316,7 +333,30 @@ class AppController extends ChangeNotifier {
         )
         .toList();
 
-    await _commit(_data.copyWith(borrowers: borrowers), now: timestamp);
+    await _commit(
+      _data.copyWith(borrowers: borrowers),
+      now: timestamp,
+      triggerImmediateSync: true,
+    );
+  }
+
+  Future<void> deleteBorrower({required Borrower borrower}) async {
+    if (borrowerHasLinkedDeals(borrower.id)) {
+      throw ArgumentError(
+        'Borrowers with linked deals cannot be deleted. Remove their linked deals first.',
+      );
+    }
+
+    final DateTime timestamp = DateTime.now();
+    final List<Borrower> borrowers = _data.borrowers
+        .where((Borrower current) => current.id != borrower.id)
+        .toList();
+
+    await _commit(
+      _data.copyWith(borrowers: borrowers),
+      now: timestamp,
+      triggerImmediateSync: true,
+    );
   }
 
   Future<void> createDeal({
@@ -333,7 +373,7 @@ class AppController extends ChangeNotifier {
       dealType: dealType.trim(),
       principal: principal,
       interestRatePercent: interestRatePercent,
-      dueDate: _dateOnly(dueDate),
+      dueDate: dueDate,
       createdAt: timestamp,
       updatedAt: timestamp,
     );
@@ -353,6 +393,56 @@ class AppController extends ChangeNotifier {
         events: <DealEvent>[..._data.events, event],
       ),
       now: timestamp,
+      triggerImmediateSync: true,
+    );
+  }
+
+  Future<void> updateDeal({
+    required LoanDeal deal,
+    required String borrowerId,
+    required String dealType,
+    required double principal,
+    required double interestRatePercent,
+    required DateTime dueDate,
+  }) async {
+    if (deal.isClosed) {
+      throw ArgumentError('Closed deals must be reopened before editing.');
+    }
+
+    final DateTime timestamp = DateTime.now();
+    final LoanDeal updatedDeal = deal.copyWith(
+      borrowerId: borrowerId,
+      dealType: dealType.trim(),
+      principal: principal,
+      interestRatePercent: interestRatePercent,
+      dueDate: dueDate,
+      updatedAt: timestamp,
+    );
+    final double totalPaid = totalPaidForDeal(deal.id);
+    if (updatedDeal.totalDue + 0.001 < totalPaid) {
+      throw ArgumentError(
+        'Updated total due cannot be lower than the amount already paid.',
+      );
+    }
+
+    final List<LoanDeal> deals = _data.deals
+        .map(
+          (LoanDeal current) => current.id == deal.id ? updatedDeal : current,
+        )
+        .toList();
+    final DealEvent event = DealEvent(
+      id: _uuid.v4(),
+      dealId: deal.id,
+      type: DealEventType.updated,
+      createdAt: timestamp,
+      description:
+          'Deal updated to ${updatedDeal.dealType} with total due ${updatedDeal.totalDue.toStringAsFixed(2)}.',
+    );
+
+    await _commit(
+      _data.copyWith(deals: deals, events: <DealEvent>[..._data.events, event]),
+      now: timestamp,
+      triggerImmediateSync: true,
     );
   }
 
@@ -424,6 +514,7 @@ class AppController extends ChangeNotifier {
         events: events,
       ),
       now: timestamp,
+      triggerImmediateSync: true,
     );
   }
 
@@ -460,6 +551,7 @@ class AppController extends ChangeNotifier {
     await _commit(
       _data.copyWith(deals: deals, events: <DealEvent>[..._data.events, event]),
       now: timestamp,
+      triggerImmediateSync: true,
     );
   }
 
@@ -496,6 +588,7 @@ class AppController extends ChangeNotifier {
     await _commit(
       _data.copyWith(deals: deals, events: <DealEvent>[..._data.events, event]),
       now: timestamp,
+      triggerImmediateSync: true,
     );
   }
 
@@ -518,15 +611,36 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _attemptScheduledSyncIfDue() async {
-    if (_syncInFlight || _now.isBefore(_data.syncState.nextAttemptAt)) {
+    if (!_hasUnsyncedChanges ||
+        _syncInFlight ||
+        _now.isBefore(_data.syncState.nextAttemptAt)) {
       return;
     }
 
     await _attemptSync();
   }
 
+  Future<void> _attemptStartupSync() async {
+    if (_syncService.isConfigured) {
+      final DateTime timestamp = DateTime.now();
+      final SyncState updatedSync = _data.syncState.copyWith(
+        isConfigured: true,
+        lastMessage: _data.hasRecords
+            ? 'Loaded records from Firebase for this session.'
+            : 'Connected to Firebase. No records found yet.',
+        nextAttemptAt: timestamp.add(const Duration(minutes: 30)),
+      );
+      await _commit(_data.copyWith(syncState: updatedSync), now: timestamp);
+      return;
+    }
+
+    await _attemptScheduledSyncIfDue();
+  }
+
   Future<void> _attemptSync({bool isManual = false}) async {
     if (_syncInFlight) {
+      _syncQueued = true;
+      _queuedManualSync = _queuedManualSync || isManual;
       return;
     }
 
@@ -534,7 +648,7 @@ class AppController extends ChangeNotifier {
     final DateTime timestamp = DateTime.now();
 
     try {
-      final GoogleSheetsSyncResult result = await _syncService.sync(
+      final FirebaseSyncResult result = await _syncService.sync(
         _data,
         isManual: isManual,
       );
@@ -549,18 +663,37 @@ class AppController extends ChangeNotifier {
         lastMessage: result.message,
         nextAttemptAt: timestamp.add(const Duration(minutes: 30)),
       );
+      if (result.success) {
+        _hasUnsyncedChanges = false;
+      }
 
       await _commit(_data.copyWith(syncState: updatedSync), now: timestamp);
     } finally {
       _syncInFlight = false;
+      if (_syncQueued) {
+        final bool queuedManualSync = _queuedManualSync;
+        _syncQueued = false;
+        _queuedManualSync = false;
+        unawaited(_attemptSync(isManual: queuedManualSync));
+      }
     }
   }
 
-  Future<void> _commit(AppData data, {DateTime? now}) async {
+  Future<void> _commit(
+    AppData data, {
+    DateTime? now,
+    bool triggerImmediateSync = false,
+  }) async {
+    if (triggerImmediateSync) {
+      _hasUnsyncedChanges = true;
+    }
     _data = data;
     _now = now ?? DateTime.now();
     notifyListeners();
     await _store.save(_data);
+    if (triggerImmediateSync && _syncService.isConfigured) {
+      unawaited(_attemptSync());
+    }
   }
 
   static DateTime _dateOnly(DateTime value) {

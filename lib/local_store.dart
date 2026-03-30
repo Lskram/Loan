@@ -1,5 +1,6 @@
 import 'models.dart';
 import 'local_store_driver.dart';
+import 'local_store_cleanup.dart';
 
 class LocalStore {
   LocalStore._(this._driver);
@@ -9,7 +10,12 @@ class LocalStore {
   final LocalStoreDriver _driver;
 
   static Future<LocalStore> create() async {
-    return LocalStore._(debugDriver ?? await createPlatformLocalStoreDriver());
+    if (debugDriver != null) {
+      return LocalStore._(debugDriver!);
+    }
+
+    await purgeLegacyLocalStoreData();
+    return LocalStore._(MemoryLocalStoreDriver());
   }
 
   Future<AppData> load() => _driver.load();

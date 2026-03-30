@@ -59,6 +59,8 @@ String dealEventLabel(DealEventType type) {
   switch (type) {
     case DealEventType.created:
       return 'สร้างดีล';
+    case DealEventType.updated:
+      return 'แก้ไขดีล';
     case DealEventType.manuallyClosed:
       return 'ปิดดีล';
     case DealEventType.autoClosed:

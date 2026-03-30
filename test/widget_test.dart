@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:nicha_loan_desk/google_sheets_sync.dart';
+import 'package:nicha_loan_desk/firebase_sync_service.dart';
 import 'package:nicha_loan_desk/local_store.dart';
 import 'package:nicha_loan_desk/local_store_driver.dart';
 import 'package:nicha_loan_desk/main.dart';
@@ -9,15 +9,14 @@ import 'package:nicha_loan_desk/main.dart';
 void main() {
   testWidgets('loan dashboard loads', (WidgetTester tester) async {
     LocalStore.debugDriver = MemoryLocalStoreDriver();
-    GoogleSheetsSyncService.debugInstance =
-        GoogleSheetsSyncService.unconfigured();
+    FirebaseSyncService.debugInstance = FirebaseSyncService.unconfigured();
     tester.view.physicalSize = const Size(1400, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(() {
       LocalStore.debugDriver = null;
-      GoogleSheetsSyncService.debugInstance = null;
+      FirebaseSyncService.debugInstance = null;
     });
 
     await tester.pumpWidget(const LoanAppBootstrap());
@@ -37,15 +36,14 @@ void main() {
     WidgetTester tester,
   ) async {
     LocalStore.debugDriver = MemoryLocalStoreDriver();
-    GoogleSheetsSyncService.debugInstance =
-        GoogleSheetsSyncService.unconfigured();
+    FirebaseSyncService.debugInstance = FirebaseSyncService.unconfigured();
     tester.view.physicalSize = const Size(1400, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(() {
       LocalStore.debugDriver = null;
-      GoogleSheetsSyncService.debugInstance = null;
+      FirebaseSyncService.debugInstance = null;
     });
 
     await tester.pumpWidget(const LoanAppBootstrap());
@@ -77,15 +75,14 @@ void main() {
     WidgetTester tester,
   ) async {
     LocalStore.debugDriver = MemoryLocalStoreDriver();
-    GoogleSheetsSyncService.debugInstance =
-        GoogleSheetsSyncService.unconfigured();
+    FirebaseSyncService.debugInstance = FirebaseSyncService.unconfigured();
     tester.view.physicalSize = const Size(1400, 1200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(() {
       LocalStore.debugDriver = null;
-      GoogleSheetsSyncService.debugInstance = null;
+      FirebaseSyncService.debugInstance = null;
     });
 
     await tester.pumpWidget(const LoanAppBootstrap());
@@ -106,4 +103,58 @@ void main() {
       isTrue,
     );
   });
+
+  testWidgets(
+    'workspace dock appears after scrolling and opens lottery placeholder',
+    (WidgetTester tester) async {
+      LocalStore.debugDriver = MemoryLocalStoreDriver();
+      FirebaseSyncService.debugInstance = FirebaseSyncService.unconfigured();
+      tester.view.physicalSize = const Size(390, 680);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(() {
+        LocalStore.debugDriver = null;
+        FirebaseSyncService.debugInstance = null;
+      });
+
+      await tester.pumpWidget(const LoanAppBootstrap());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('app-workspace-dock')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('section-lottery')),
+        findsNothing,
+      );
+
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('app-workspace-dock')),
+        findsOneWidget,
+      );
+
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 120));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('app-workspace-dock')),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('workspace-lottery-button')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('section-lottery')),
+        findsOneWidget,
+      );
+    },
+  );
 }
